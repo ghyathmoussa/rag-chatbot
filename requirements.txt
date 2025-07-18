@@ -1,0 +1,8 @@
+qdrant-client
+sentence-transformers
+groq
+langchain
+tiktoken
+openai
+python-dotenv
+loguru

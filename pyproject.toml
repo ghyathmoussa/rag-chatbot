@@ -1,0 +1,10 @@
+[project]
+name = "rag-chatbot"
+version = "0.1.0"
+description = "Build a RAG chatbot to chat with your data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["chat"]

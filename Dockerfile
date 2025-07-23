@@ -21,8 +21,6 @@ RUN pip install --no-cache-dir jupyter notebook
 
 # Copy source code
 COPY src/ ./src/
-COPY tests/ ./tests/
-COPY pytest.ini .
 
 # Set Python path
 ENV PYTHONPATH=/app/src:$PYTHONPATH
@@ -35,4 +33,4 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Default command (can be overridden in docker-compose)
-CMD ["python", "-m", "src.main"]
+CMD ["python", "-m", "src.api.app"]

@@ -6,3 +6,15 @@ tiktoken
 openai
 python-dotenv
 loguru
+pytest
+pytest-mock
+pytest-cov
+pytest-asyncio
+sqlalchemy
+psycopg2-binary
+alembic
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+aiofiles

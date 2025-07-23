@@ -39,23 +39,6 @@ async def health_check():
         "version": "1.0.0"
     }
 
-# Root endpoint - serves the web UI
-@app.get("/")
-async def root():
-    static_file = "static/index.html"
-    if os.path.exists(static_file):
-        return FileResponse(static_file)
-    else:
-        return {"message": "RAG Chatbot API", "docs": "/docs"}
-
-# Mount static files (create directory if it doesn't exist)
-static_dir = "static"
-if not os.path.exists(static_dir):
-    os.makedirs(static_dir)
-    logger.info(f"Created {static_dir} directory")
-
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
 # Startup event
 @app.on_event("startup")
 async def startup_event():

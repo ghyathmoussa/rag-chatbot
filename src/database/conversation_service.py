@@ -24,7 +24,7 @@ class ConversationService:
                     session_id=str(uuid.uuid4()),
                     user_id=user_id,
                     title=title or "New Conversation",
-                    metadata=metadata or {}
+                    meta_data=metadata or {}
                 )
                 session.add(conversation)
                 session.commit()
@@ -57,7 +57,7 @@ class ConversationService:
                     token_count=token_count,
                     model_used=model_used,
                     processing_time=processing_time,
-                    metadata=metadata or {}
+                    meta_data=metadata or {}
                 )
                 session.add(message)
                 

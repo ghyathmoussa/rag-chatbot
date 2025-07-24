@@ -15,7 +15,7 @@ class Conversation(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     title = Column(String(500))
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
     
@@ -36,7 +36,7 @@ class Message(Base):
     token_count = Column(Integer)
     model_used = Column(String(100))
     processing_time = Column(Float)
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     
     # Context information
     context_used = Column(JSON)  # Store the context chunks used for this response

@@ -2,6 +2,7 @@ qdrant-client
 sentence-transformers
 groq
 langchain
+langchain-community
 tiktoken
 openai
 python-dotenv

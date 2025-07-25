@@ -13,11 +13,14 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
+# Install uv for faster package installation
+RUN pip install uv
+
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system -r requirements.txt
 
 # Install additional dependencies for PostgreSQL
-RUN pip install --no-cache-dir jupyter notebook
+RUN uv pip install --system jupyter notebook
 
 # Copy source code
 COPY src/ ./src/

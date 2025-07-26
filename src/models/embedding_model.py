@@ -19,6 +19,6 @@ class Embedder:
             chunks.append(" ".join(chunk))
             i += max_tokens - overlap
         return chunks
-
+    
     def embed_chunks(self, chunks: List[str]) -> List[List[float]]:
         return self.model.encode(chunks, convert_to_tensor=False)

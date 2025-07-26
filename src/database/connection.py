@@ -86,8 +86,9 @@ class DatabaseManager:
     def test_connection(self):
         """Test database connection"""
         try:
+            from sqlalchemy import text
             with self.engine.connect() as conn:
-                result = conn.execute("SELECT 1")
+                result = conn.execute(text("SELECT 1"))
                 logger.info("Database connection test successful")
                 return True
         except Exception as e:

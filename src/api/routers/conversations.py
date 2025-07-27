@@ -24,12 +24,12 @@ async def create_conversation(conversation: ConversationCreate):
             title=conversation.title
         )
         return ConversationResponse(
-            id=conv.id,
-            session_id=conv.session_id,
-            title=conv.title,
-            created_at=conv.created_at,
-            updated_at=conv.updated_at,
-            message_count=0
+            id=conv['id'],
+            session_id=conv['session_id'],
+            title=conv['title'],
+            created_at=conv['created_at'],
+            updated_at=conv['updated_at'],
+            message_count=conv['message_count']
         )
     except Exception as e:
         logger.error(f"Error creating conversation: {e}")
@@ -47,12 +47,12 @@ async def get_user_conversations(
         conversations = conversation_service.get_user_conversations(user_id, limit, offset)
         return [
             ConversationResponse(
-                id=conv.id,
-                session_id=conv.session_id,
-                title=conv.title,
-                created_at=conv.created_at,
-                updated_at=conv.updated_at,
-                message_count=len(conv.messages) if conv.messages else 0
+                id=conv['id'],
+                session_id=conv['session_id'],
+                title=conv['title'],
+                created_at=conv['created_at'],
+                updated_at=conv['updated_at'],
+                message_count=conv['message_count']
             )
             for conv in conversations
         ]
@@ -70,12 +70,12 @@ async def get_conversation(conversation_id: int):
             raise HTTPException(status_code=404, detail="Conversation not found")
         
         return ConversationResponse(
-            id=conv.id,
-            session_id=conv.session_id,
-            title=conv.title,
-            created_at=conv.created_at,
-            updated_at=conv.updated_at,
-            message_count=len(conv.messages) if conv.messages else 0
+            id=conv['id'],
+            session_id=conv['session_id'],
+            title=conv['title'],
+            created_at=conv['created_at'],
+            updated_at=conv['updated_at'],
+            message_count=conv['message_count']
         )
     except HTTPException:
         raise
@@ -95,12 +95,12 @@ async def update_conversation(conversation_id: int, update: ConversationUpdate):
             raise HTTPException(status_code=404, detail="Conversation not found")
         
         return ConversationResponse(
-            id=conv.id,
-            session_id=conv.session_id,
-            title=conv.title,
-            created_at=conv.created_at,
-            updated_at=conv.updated_at,
-            message_count=len(conv.messages) if conv.messages else 0
+            id=conv['id'],
+            session_id=conv['session_id'],
+            title=conv['title'],
+            created_at=conv['created_at'],
+            updated_at=conv['updated_at'],
+            message_count=conv['message_count']
         )
     except HTTPException:
         raise
@@ -130,13 +130,13 @@ async def get_conversation_messages(
         messages = conversation_service.get_conversation_history(conversation_id, limit)
         return [
             MessageResponse(
-                id=msg.id,
-                role=msg.role,
-                content=msg.content,
-                created_at=msg.created_at,
-                context_used=msg.context_used,
-                token_count=msg.token_count,
-                processing_time=msg.processing_time
+                id=msg['id'],
+                role=msg['role'],
+                content=msg['content'],
+                created_at=msg['created_at'],
+                context_used=msg['context_used'],
+                token_count=msg['token_count'],
+                processing_time=msg['processing_time']
             )
             for msg in messages
         ]

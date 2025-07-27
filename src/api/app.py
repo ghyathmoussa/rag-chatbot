@@ -50,6 +50,15 @@ async def startup_event():
         logger.error("Failed to connect to database")
     else:
         logger.info("Database connection successful")
+    
+    # Initialize Qdrant collection
+    logger.info("Initializing Qdrant collection...")
+    from src.utils.init_qdrant import init_qdrant_collection
+    try:
+        init_qdrant_collection()
+        logger.info("Qdrant initialization completed")
+    except Exception as e:
+        logger.error(f"Failed to initialize Qdrant: {e}")
 
 # Shutdown event
 @app.on_event("shutdown")

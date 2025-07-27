@@ -16,7 +16,7 @@ class ConversationService:
         user_id: Optional[str] = None,
         title: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
-    ) -> Conversation:
+    ) -> Dict[str, Any]:
         """Create a new conversation"""
         try:
             with self.db_manager.get_session() as session:
@@ -30,7 +30,16 @@ class ConversationService:
                 session.commit()
                 session.refresh(conversation)
                 logger.info(f"Created new conversation: {conversation.session_id}")
-                return conversation
+                
+                # Return extracted data
+                return {
+                    'id': conversation.id,
+                    'session_id': conversation.session_id,
+                    'title': conversation.title,
+                    'created_at': conversation.created_at,
+                    'updated_at': conversation.updated_at,
+                    'message_count': 0
+                }
         except Exception as e:
             logger.error(f"Failed to create conversation: {e}")
             raise
@@ -96,22 +105,44 @@ class ConversationService:
             logger.error(f"Failed to save context chunks: {e}")
             raise
     
-    def get_conversation(self, conversation_id: int) -> Optional[Conversation]:
+    def get_conversation(self, conversation_id: int) -> Optional[Dict[str, Any]]:
         """Get a conversation by ID"""
         try:
             with self.db_manager.get_session() as session:
                 conversation = session.query(Conversation).filter_by(id=conversation_id).first()
-                return conversation
+                if not conversation:
+                    return None
+                    
+                # Extract data within session context
+                return {
+                    'id': conversation.id,
+                    'session_id': conversation.session_id,
+                    'title': conversation.title,
+                    'created_at': conversation.created_at,
+                    'updated_at': conversation.updated_at,
+                    'message_count': len(conversation.messages) if conversation.messages else 0
+                }
         except Exception as e:
             logger.error(f"Failed to get conversation: {e}")
             return None
     
-    def get_conversation_by_session_id(self, session_id: str) -> Optional[Conversation]:
+    def get_conversation_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get a conversation by session ID"""
         try:
             with self.db_manager.get_session() as session:
                 conversation = session.query(Conversation).filter_by(session_id=session_id).first()
-                return conversation
+                if not conversation:
+                    return None
+                    
+                # Extract data within session context
+                return {
+                    'id': conversation.id,
+                    'session_id': conversation.session_id,
+                    'title': conversation.title,
+                    'created_at': conversation.created_at,
+                    'updated_at': conversation.updated_at,
+                    'message_count': len(conversation.messages) if conversation.messages else 0
+                }
         except Exception as e:
             logger.error(f"Failed to get conversation by session ID: {e}")
             return None
@@ -120,7 +151,7 @@ class ConversationService:
         self,
         conversation_id: int,
         limit: Optional[int] = None
-    ) -> List[Message]:
+    ) -> List[Dict[str, Any]]:
         """Get messages from a conversation"""
         try:
             with self.db_manager.get_session() as session:
@@ -129,10 +160,29 @@ class ConversationService:
                 ).order_by(Message.created_at)
                 
                 if limit:
-                    query = query.limit(limit)
+                    # Get the latest N messages
+                    query = query.order_by(Message.created_at.desc()).limit(limit)
+                    messages = query.all()
+                    # Reverse to maintain chronological order
+                    messages.reverse()
+                else:
+                    messages = query.all()
                 
-                messages = query.all()
-                return messages
+                # Extract data within session context
+                result = []
+                for msg in messages:
+                    result.append({
+                        'id': msg.id,
+                        'role': msg.role,
+                        'content': msg.content,
+                        'created_at': msg.created_at,
+                        'context_used': msg.context_used,
+                        'token_count': msg.token_count,
+                        'processing_time': msg.processing_time,
+                        'model_used': msg.model_used,
+                        'meta_data': msg.meta_data
+                    })
+                return result
         except Exception as e:
             logger.error(f"Failed to get conversation history: {e}")
             return []
@@ -142,7 +192,7 @@ class ConversationService:
         user_id: str,
         limit: Optional[int] = 10,
         offset: Optional[int] = 0
-    ) -> List[Conversation]:
+    ) -> List[Dict[str, Any]]:
         """Get conversations for a user"""
         try:
             with self.db_manager.get_session() as session:
@@ -151,7 +201,19 @@ class ConversationService:
                 ).order_by(
                     Conversation.updated_at.desc()
                 ).limit(limit).offset(offset).all()
-                return conversations
+                
+                # Extract data within session context
+                result = []
+                for conv in conversations:
+                    result.append({
+                        'id': conv.id,
+                        'session_id': conv.session_id,
+                        'title': conv.title,
+                        'created_at': conv.created_at,
+                        'updated_at': conv.updated_at,
+                        'message_count': len(conv.messages) if conv.messages else 0
+                    })
+                return result
         except Exception as e:
             logger.error(f"Failed to get user conversations: {e}")
             return []

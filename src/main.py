@@ -22,10 +22,10 @@ def main():
     )
     
     # Initialize GroqModel with conversation
-    groq_model = GroqModel(conversation_id=conversation.id)
+    groq_model = GroqModel(conversation_id=conversation['id'])
     
-    logger.info(f"Created conversation: {conversation.session_id}")
-    print(f"\nRAG Chatbot started. Conversation ID: {conversation.session_id}")
+    logger.info(f"Created conversation: {conversation['session_id']}")
+    print(f"\nRAG Chatbot started. Conversation ID: {conversation['session_id']}")
     print("Type 'quit' to exit, 'load <filepath>' to load a document\n")
     
     while True:

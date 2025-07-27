@@ -94,8 +94,8 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./streamlit_app.py:/app/streamlit_app.py
-    command: streamlit run streamlit_app.py
+      - ./streamlit.py:/app/streamlit.py
+    command: streamlit run streamlit.py
     networks:
       - rag-network
     stdin_open: true

@@ -14,7 +14,7 @@ class GroqModel:
         self.embedder = Embedder()
         self.store = QDrantModel()
         self.conversation_id = conversation_id
-        self.system_prompt = "You are a helpful AI assistant that uses the provided context to answer questions accurately."
+        self.system_prompt = """You are a helpful AI assistant. When provided with context, use it to answer questions accurately. If no relevant context is provided, answer based on your general knowledge. Always be specific and helpful in your responses. Never just give generic greetings unless the user is actually greeting you."""
     
     def grqo_chat(self, user_query: str, context: List[str]) -> str:
         """Chat with context and save to database"""
@@ -30,6 +30,10 @@ class GroqModel:
                 {"role": "user", "content": f"Context:\n{formatted_context}\n\nQuestion: {user_query}"}
             ]
             
+            logger.info(f"Sending to Groq API with model: {GROQ_MODEL}")
+            logger.debug(f"User query: {user_query}")
+            logger.debug(f"Context preview: {formatted_context[:200]}..." if len(formatted_context) > 200 else f"Context: {formatted_context}")
+            
             # Get response from Groq
             response = self.client.chat.completions.create(
                 model=GROQ_MODEL,
@@ -39,6 +43,7 @@ class GroqModel:
             )
             
             assistant_response = response.choices[0].message.content
+            logger.info(f"Received response from Groq: {assistant_response[:100]}...")
             processing_time = time.time() - start_time
             
             # Save to database if conversation exists
@@ -64,6 +69,7 @@ class GroqModel:
                     context_used = [{"text": text, "score": 1.0} for text in context]
                 
                 # Save assistant response
+                token_count = response.usage.total_tokens if hasattr(response, 'usage') else None
                 conversation_service.add_message(
                     conversation_id=self.conversation_id,
                     role="assistant",
@@ -71,8 +77,15 @@ class GroqModel:
                     context_used=context_used,
                     model_used=GROQ_MODEL,
                     processing_time=processing_time,
-                    token_count=response.usage.total_tokens if hasattr(response, 'usage') else None
+                    token_count=token_count
                 )
+                
+                # Store message info for return
+                self._last_message_info = {
+                    'context_used': context_used,
+                    'token_count': token_count,
+                    'processing_time': processing_time
+                }
             
             logger.info(f"Generated response in {processing_time:.2f}s")
             return assistant_response
@@ -93,6 +106,20 @@ class GroqModel:
             
             # Chunk and embed
             chunks = self.embedder.chunk_text(text)
+            logger.info(f"Created {len(chunks)} chunks from {len(text)} characters")
+            
+            # Remove duplicate chunks (in case of chunking issues)
+            unique_chunks = []
+            seen = set()
+            for chunk in chunks:
+                if chunk not in seen:
+                    unique_chunks.append(chunk)
+                    seen.add(chunk)
+            
+            if len(unique_chunks) < len(chunks):
+                logger.warning(f"Removed {len(chunks) - len(unique_chunks)} duplicate chunks")
+                chunks = unique_chunks
+            
             embeddings = self.embedder.embed_chunks(chunks)
             
             # Store in Qdrant
@@ -104,24 +131,54 @@ class GroqModel:
             logger.error(f"Error processing document: {e}")
             raise
     
-    def query_with_context(self, query: str, top_k: int = 5) -> str:
+    def query_with_context(self, query: str, top_k: int = 5) -> Dict[str, Any]:
         """Query with RAG context"""
         try:
+            logger.info(f"Processing query: {query}")
+            
             # Get query embedding
             query_embedding = self.embedder.embed_chunks([query])[0]
+            logger.info(f"Created query embedding with dimension: {len(query_embedding)}")
             
             # Search for similar chunks
             results = self.store.query(query_embedding, top_k=top_k)
+            logger.info(f"Retrieved {len(results)} context chunks from Qdrant")
             
             # Extract context text for the prompt
             context_text = [result["text"] for result in results]
+            if context_text:
+                logger.info(f"Using context from {len(context_text)} chunks")
+            else:
+                logger.warning("No context found for query")
             
             # Store results in instance for grqo_chat to use
             self._last_results = results
             
             # Generate response
-            return self.grqo_chat(query, context_text)
+            response_content = self.grqo_chat(query, context_text)
+            
+            # Get the last saved message info
+            if hasattr(self, '_last_message_info'):
+                return {
+                    "content": response_content,
+                    "context_used": self._last_message_info.get('context_used', []),
+                    "token_count": self._last_message_info.get('token_count', 0),
+                    "processing_time": self._last_message_info.get('processing_time', 0)
+                }
+            else:
+                return {
+                    "content": response_content,
+                    "context_used": [{"text": r["text"], "score": r["score"]} for r in results],
+                    "token_count": 0,
+                    "processing_time": 0
+                }
             
         except Exception as e:
             logger.error(f"Error in query_with_context: {e}")
-            return "Sorry, I couldn't retrieve relevant context for your question."
+            # Return error response in same format
+            return {
+                "content": f"I encountered an error while processing your request: {str(e)}",
+                "context_used": [],
+                "token_count": 0,
+                "processing_time": 0
+            }

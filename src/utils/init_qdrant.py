@@ -18,7 +18,7 @@ def init_qdrant_collection():
         
         if QDRANT_COLLECTION_NAME not in collection_names:
             # Create collection with appropriate vector size
-            # all-MiniLM-L6-v2 produces 384-dimensional vectors
+            # all-mpnet-base-v2 produces 768-dimensional vectors
             client.create_collection(
                 collection_name=QDRANT_COLLECTION_NAME,
                 vectors_config=VectorParams(size=768, distance=Distance.COSINE),

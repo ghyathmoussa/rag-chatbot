@@ -3,6 +3,8 @@ from typing import Optional
 import os
 import aiofiles
 from pathlib import Path
+import pypdf
+import pdfplumber
 
 from src.models.groq_model import GroqModel
 from src.api.schemas import DocumentUploadResponse
@@ -14,8 +16,34 @@ router = APIRouter(
 )
 
 # Allowed file extensions
-ALLOWED_EXTENSIONS = {'.txt', '.md', '.pdf', '.doc', '.docx'}
+ALLOWED_EXTENSIONS = {'.txt', '.md', '.pdf'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+def extract_text_from_pdf(file_path: str) -> str:
+    """Extract text from PDF file"""
+    text = ""
+    try:
+        # Try with pdfplumber first (better for complex layouts)
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        
+        # If pdfplumber didn't extract much, try pypdf
+        if len(text.strip()) < 100:
+            text = ""
+            with open(file_path, 'rb') as file:
+                pdf_reader = pypdf.PdfReader(file)
+                for page_num in range(len(pdf_reader.pages)):
+                    page = pdf_reader.pages[page_num]
+                    text += page.extract_text() + "\n"
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {e}")
+        raise
+    
+    return text.strip()
 
 
 @router.post("/upload", response_model=DocumentUploadResponse)
@@ -55,10 +83,40 @@ async def upload_document(
         # Process based on file type
         if file_ext in ['.txt', '.md']:
             groq_model.process_and_store(temp_file_path)
-            chunks_processed = "Document processed"  # You can get actual count from process_and_store
+            chunks_processed = "Document processed"
+        elif file_ext == '.pdf':
+            # Extract text from PDF
+            try:
+                pdf_text = extract_text_from_pdf(temp_file_path)
+                if not pdf_text or len(pdf_text.strip()) < 10:
+                    os.remove(temp_file_path)
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Could not extract text from PDF. The file might be empty or contain only images."
+                    )
+                
+                # Save extracted text to temporary file
+                txt_file_path = temp_file_path.replace('.pdf', '_extracted.txt')
+                with open(txt_file_path, 'w', encoding='utf-8') as f:
+                    f.write(pdf_text)
+                
+                # Process the extracted text
+                groq_model.process_and_store(txt_file_path)
+                chunks_processed = "PDF processed"
+                
+                # Clean up text file
+                os.remove(txt_file_path)
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error processing PDF: {e}")
+                os.remove(temp_file_path)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error processing PDF: {str(e)}"
+                )
         else:
-            # For other file types, we'll need additional processing
-            # For now, we'll return an error
             os.remove(temp_file_path)
             raise HTTPException(
                 status_code=501,

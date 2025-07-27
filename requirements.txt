@@ -21,6 +21,8 @@ websockets
 aiofiles
 streamlit>=1.29.0
 streamlit-chat>=0.1.1
+streamlit-extras>=0.3.5
 requests>=2.31.0
 websocket-client>=1.6.4
 pandas>=2.1.4
+plotly>=5.18.0

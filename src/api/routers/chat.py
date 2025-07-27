@@ -55,18 +55,31 @@ async def send_message(conversation_id: int, request: MessageRequest):
         )
         
         # Get the saved assistant message
-        messages = conversation_service.get_conversation_history(conversation_id, limit=1)
+        logger.info("Getting conversation history...")
+        messages = conversation_service.get_conversation_history(conversation_id, limit=2)
+        logger.info(f"Retrieved {len(messages)} messages")
+        
         if messages:
-            msg = messages[-1]
-            return MessageResponse(
-                id=msg.id,
-                role=msg.role,
-                content=msg.content,
-                created_at=msg.created_at,
-                context_used=msg.context_used,
-                token_count=msg.token_count,
-                processing_time=msg.processing_time
-            )
+            # Find the assistant's response (should be the last assistant message)
+            assistant_msg = None
+            for msg in reversed(messages):
+                if msg.get('role') == 'assistant':
+                    assistant_msg = msg
+                    break
+            
+            if assistant_msg:
+                logger.info(f"Returning message: role={assistant_msg.get('role')}, id={assistant_msg.get('id')}")
+                return MessageResponse(
+                    id=assistant_msg['id'],
+                    role=assistant_msg['role'],
+                    content=assistant_msg['content'],
+                    created_at=assistant_msg['created_at'],
+                    context_used=assistant_msg['context_used'],
+                    token_count=assistant_msg['token_count'],
+                    processing_time=assistant_msg['processing_time']
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Failed to retrieve assistant message")
         else:
             raise HTTPException(status_code=500, detail="Failed to retrieve message")
             

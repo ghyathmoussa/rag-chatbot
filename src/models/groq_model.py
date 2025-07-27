@@ -5,6 +5,7 @@ from src.configs.configs import GROQ_API_KEY, GROQ_MODEL
 from src.models.embedding_model import Embedder
 from src.models.qdrant_model import QDrantModel
 from src.database.conversation_service import conversation_service
+from src.database.connection import db_manager
 from src.utils.logger import logger
 from langchain.document_loaders import TextLoader
 class GroqModel:
@@ -50,12 +51,24 @@ class GroqModel:
                     metadata={"has_context": bool(context)}
                 )
                 
+                # Format context_used based on whether we have full results
+                context_used = []
+                if hasattr(self, '_last_results') and self._last_results:
+                    # Use full results with score if available
+                    context_used = [
+                        {"text": result["text"], "score": result["score"]}
+                        for result in self._last_results
+                    ]
+                elif context:
+                    # Fallback to simple format if no results available
+                    context_used = [{"text": text, "score": 1.0} for text in context]
+                
                 # Save assistant response
                 conversation_service.add_message(
                     conversation_id=self.conversation_id,
                     role="assistant",
                     content=assistant_response,
-                    context_used=context,
+                    context_used=context_used,
                     model_used=GROQ_MODEL,
                     processing_time=processing_time,
                     token_count=response.usage.total_tokens if hasattr(response, 'usage') else None
@@ -83,7 +96,7 @@ class GroqModel:
             embeddings = self.embedder.embed_chunks(chunks)
             
             # Store in Qdrant
-            self.store.store(embeddings, chunks)
+            self.store.store(chunks, embeddings)
             
             logger.info(f"Processed and stored {len(chunks)} chunks from {file_path}")
             
@@ -100,11 +113,14 @@ class GroqModel:
             # Search for similar chunks
             results = self.store.query(query_embedding, top_k=top_k)
             
-            # Extract context
-            context = [result["text"] for result in results]
+            # Extract context text for the prompt
+            context_text = [result["text"] for result in results]
+            
+            # Store results in instance for grqo_chat to use
+            self._last_results = results
             
             # Generate response
-            return self.grqo_chat(query, context)
+            return self.grqo_chat(query, context_text)
             
         except Exception as e:
             logger.error(f"Error in query_with_context: {e}")

@@ -45,8 +45,8 @@ services:
       dockerfile: Dockerfile
     container_name: rag-chatbot
     depends_on:
-      qdrant:
-        condition: service_healthy
+      # qdrant:
+      #   condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
@@ -69,7 +69,41 @@ services:
       - rag-network
     stdin_open: true
     tty: true
-
+  appstreamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-chatbot-streamlit
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-rag_collection}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-raguser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ragpassword}
+      - POSTGRES_DB=${POSTGRES_DB:-ragchatbot}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - API_BASE_URL=http://app:8000
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./streamlit_app_ws.py:/app/streamlit_app_ws.py
+      - ./streamlit_app_enhanced.py:/app/streamlit_app_enhanced.py
+      - ./streamlit_app.py:/app/streamlit_app.py
+      - ./streamlit_app_v2.py:/app/streamlit_app_v2.py
+      - ./.streamlit:/app/.streamlit
+    command: streamlit run streamlit_app_v2.py
+    networks:
+      - rag-network
+    stdin_open: true
+    tty: true
   # Optional: Jupyter notebook for development
   notebook:
     build:

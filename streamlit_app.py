@@ -102,11 +102,11 @@ def fetch_conversations():
     """Fetch user conversations from API"""
     data = api_request(
         "GET", 
-        f"/api/conversations",
-        params={"user_id": st.session_state.user_id, "limit": 50}
+        f"/api/conversations/user/{st.session_state.user_id}",
+        params={"limit": 50}
     )
     if data:
-        st.session_state.conversations = data.get('conversations', [])
+        st.session_state.conversations = data
 
 def create_conversation(title: str = "New Conversation"):
     """Create a new conversation"""

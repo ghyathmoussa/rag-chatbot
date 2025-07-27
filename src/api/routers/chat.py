@@ -41,47 +41,31 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@router.post("/{conversation_id}/message", response_model=MessageResponse)
+@router.post("/{conversation_id}/message")
 async def send_message(conversation_id: int, request: MessageRequest):
     """Send a message and get response (REST endpoint)"""
     try:
         # Initialize model with conversation
         groq_model = GroqModel(conversation_id=conversation_id)
         
-        # Get response
-        response = await asyncio.to_thread(
+        # Store the context used for the response
+        context_used = []
+        
+        # Get response - this will save both user and assistant messages to DB
+        response_data = await asyncio.to_thread(
             groq_model.query_with_context,
             request.message
         )
         
-        # Get the saved assistant message
-        logger.info("Getting conversation history...")
-        messages = conversation_service.get_conversation_history(conversation_id, limit=2)
-        logger.info(f"Retrieved {len(messages)} messages")
+        logger.info(f"Generated response: {response_data['content'][:100]}...")
         
-        if messages:
-            # Find the assistant's response (should be the last assistant message)
-            assistant_msg = None
-            for msg in reversed(messages):
-                if msg.get('role') == 'assistant':
-                    assistant_msg = msg
-                    break
-            
-            if assistant_msg:
-                logger.info(f"Returning message: role={assistant_msg.get('role')}, id={assistant_msg.get('id')}")
-                return MessageResponse(
-                    id=assistant_msg['id'],
-                    role=assistant_msg['role'],
-                    content=assistant_msg['content'],
-                    created_at=assistant_msg['created_at'],
-                    context_used=assistant_msg['context_used'],
-                    token_count=assistant_msg['token_count'],
-                    processing_time=assistant_msg['processing_time']
-                )
-            else:
-                raise HTTPException(status_code=500, detail="Failed to retrieve assistant message")
-        else:
-            raise HTTPException(status_code=500, detail="Failed to retrieve message")
+        # Return the response directly
+        return {
+            "content": response_data["content"],
+            "context_used": response_data.get("context_used", []),
+            "token_count": response_data.get("token_count", 0),
+            "processing_time": response_data.get("processing_time", 0)
+        }
             
     except Exception as e:
         logger.error(f"Error sending message: {e}")
@@ -111,7 +95,7 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: int):
                 
                 try:
                     # Get response from model (run in thread to avoid blocking)
-                    response = await asyncio.to_thread(
+                    response_data = await asyncio.to_thread(
                         groq_model.query_with_context,
                         user_message
                     )
@@ -120,8 +104,11 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: int):
                     await manager.send_json({
                         "type": "message",
                         "role": "assistant",
-                        "content": response,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "content": response_data["content"],
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "context_used": response_data.get("context_used", []),
+                        "token_count": response_data.get("token_count", 0),
+                        "processing_time": response_data.get("processing_time", 0)
                     }, conversation_id)
                     
                 except Exception as e:

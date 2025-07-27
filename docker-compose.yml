@@ -94,34 +94,34 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./streamlit.py:/app/streamlit.py
-    command: streamlit run streamlit.py
+      - ./streamlit_ui.py:/app/streamlit_ui.py
+    command: streamlit run streamlit_ui.py
     networks:
       - rag-network
     stdin_open: true
     tty: true
   # Optional: Jupyter notebook for development
-  notebook:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: rag-notebook
-    command: jupyter notebook --ip=0.0.0.0 --no-browser --allow-root
-    depends_on:
-      - qdrant
-    environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - QDRANT_URL=http://qdrant:6333
-      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
-      - JUPYTER_ENABLE_LAB=yes
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./:/app
-    networks:
-      - rag-network
-    profiles:
-      - development
+  # notebook:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: rag-notebook
+  #   command: jupyter notebook --ip=0.0.0.0 --no-browser --allow-root
+  #   depends_on:
+  #     - qdrant
+  #   environment:
+  #     - GROQ_API_KEY=${GROQ_API_KEY}
+  #     - QDRANT_URL=http://qdrant:6333
+  #     - QDRANT_API_KEY=${QDRANT_API_KEY:-}
+  #     - JUPYTER_ENABLE_LAB=yes
+  #   ports:
+  #     - "8888:8888"
+  #   volumes:
+  #     - ./:/app
+  #   networks:
+  #     - rag-network
+  #   profiles:
+  #     - development
 
 networks:
   rag-network:

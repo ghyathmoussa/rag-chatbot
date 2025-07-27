@@ -3,18 +3,13 @@ import requests
 import json
 from datetime import datetime
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 import pandas as pd
 import os
-from pathlib import Path
 import uuid
 import plotly.express as px
-import plotly.graph_objects as go
-from streamlit_extras.metric_cards import style_metric_cards
 from streamlit_extras.colored_header import colored_header
-import asyncio
-import websockets
-import threading
+
 
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")

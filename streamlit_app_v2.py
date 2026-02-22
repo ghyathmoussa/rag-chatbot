@@ -170,7 +170,7 @@ with st.sidebar:
         
         uploaded_file = st.file_uploader(
             "Upload document",
-            type=['txt', 'md', 'pdf', 'doc', 'docx', 'csv', 'json'],
+            type=['txt', 'md', 'pdf', 'docx', 'csv', 'json'],
             key="doc_upload"
         )
         

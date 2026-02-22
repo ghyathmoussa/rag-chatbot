@@ -26,3 +26,6 @@ requests>=2.31.0
 websocket-client>=1.6.4
 pandas>=2.1.4
 plotly>=5.18.0
+pypdf
+python-docx
+unstructured

@@ -56,15 +56,18 @@ async def send_message(conversation_id: int, request: MessageRequest):
         
         # Get the saved assistant message
         logger.info("Getting conversation history...")
-        messages = conversation_service.get_conversation_history(conversation_id, limit=2)
+        # Get more messages to ensure we get the new one
+        messages = conversation_service.get_conversation_history(conversation_id, limit=10)
         logger.info(f"Retrieved {len(messages)} messages")
-        
+
         if messages:
-            # Find the assistant's response (should be the last assistant message)
+            # Find the most recent assistant message (the one we just created)
+            # Iterate in normal order (newest first)
             assistant_msg = None
-            for msg in reversed(messages):
+            for msg in messages:
                 if msg.get('role') == 'assistant':
                     assistant_msg = msg
+                    # Get the first (most recent) assistant message and stop
                     break
             
             if assistant_msg:

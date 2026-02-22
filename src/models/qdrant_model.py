@@ -6,11 +6,12 @@ from qdrant_client.models import PointStruct
 from src.models.embedding_model import Embedder
 
 class QDrantModel:
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, url: Optional[str] = None, use_grpc: bool = False):
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, url: Optional[str] = None, use_grpc: bool = False, conversation_id: Optional[int] = None):
         self.url = url or QDRANT_URL
         self.host = host
         self.port = port
         self.use_grpc = use_grpc
+        self.conversation_id = conversation_id
         self.client = self._connect()
 
     def _connect(self):
@@ -23,20 +24,88 @@ class QDrantModel:
     def _disconnect(self):
         self.client.close()
     
-    def store(self, chunks: List[str], embeddings: List[List[float]]):
+    def store(self, chunks: List[str], embeddings: List[List[float]], conversation_id: Optional[int] = None):
         collection_name = QDRANT_COLLECTION_NAME or "rag_collection"
+        conv_id = self.conversation_id or conversation_id
         points = [
-            PointStruct(id=str(uuid.uuid4()), vector=vec, payload={"text": chunk})
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=vec,
+                payload={
+                    "text": chunk,
+                    "conversation_id": conv_id
+                } if conv_id else {"text": chunk}
+            )
             for chunk, vec in zip(chunks, embeddings)
         ]
         self.client.upsert(collection_name=collection_name, points=points)
     
-    def query(self, query_vec: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
+    def query(self, query_vec: List[float], top_k: int = 5, conversation_id: Optional[int] = None) -> List[Dict[str, Any]]:
         from typing import Dict, Any
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
         collection_name = QDRANT_COLLECTION_NAME or "rag_collection"
-        hits = self.client.search(
+        conv_id = self.conversation_id or conversation_id
+
+        # Build filter if conversation_id provided
+        query_filter = None
+        if conv_id is not None:
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="conversation_id",
+                        match=MatchValue(value=conv_id)
+                    )
+                ]
+            )
+
+        hits = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_vec,
+            query=query_vec,
+            query_filter=query_filter,
             limit=top_k
+        ).points
+
+        return [
+            {
+                "text": hit.payload["text"],
+                "score": hit.score,
+                "conversation_id": hit.payload.get("conversation_id")
+            }
+            for hit in hits
+        ]
+
+    def delete_conversation_points(self, conversation_id: int):
+        """Delete all points for a specific conversation"""
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+        collection_name = QDRANT_COLLECTION_NAME or "rag_collection"
+        self.client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="conversation_id",
+                        match=MatchValue(value=conversation_id)
+                    )
+                ]
+            )
         )
-        return [{"text": hit.payload["text"], "score": hit.score} for hit in hits]
+
+    def get_conversation_point_count(self, conversation_id: int) -> int:
+        """Get count of points for a specific conversation"""
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+        collection_name = QDRANT_COLLECTION_NAME or "rag_collection"
+        result = self.client.count(
+            collection_name=collection_name,
+            count_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="conversation_id",
+                        match=MatchValue(value=conversation_id)
+                    )
+                ]
+            )
+        )
+        return result.count

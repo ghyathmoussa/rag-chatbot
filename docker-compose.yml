@@ -11,12 +11,6 @@ services:
       - QDRANT__SERVICE__GRPC_PORT=6334
     networks:
       - rag-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
   # PostgreSQL database
   postgres:
@@ -33,7 +27,7 @@ services:
     networks:
       - rag-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser} -d ${POSTGRES_DB:-ragchatbot}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,6 +45,8 @@ services:
         condition: service_healthy
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-gemma2-9b-it}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-rag_collection}
@@ -81,6 +77,8 @@ services:
         condition: service_healthy
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-gemma2-9b-it}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-rag_collection}

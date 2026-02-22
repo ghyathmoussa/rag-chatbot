@@ -1,5 +1,6 @@
 import time
 from typing import List, Optional, Dict, Any
+from pathlib import Path
 from groq import Groq
 from src.configs.configs import GROQ_API_KEY, GROQ_MODEL
 from src.models.embedding_model import Embedder
@@ -7,12 +8,14 @@ from src.models.qdrant_model import QDrantModel
 from src.database.conversation_service import conversation_service
 from src.database.connection import db_manager
 from src.utils.logger import logger
-from langchain.document_loaders import TextLoader
+
+# Document loaders for different file types
+from langchain.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader, CSVLoader, JSONLoader
 class GroqModel:
     def __init__(self, conversation_id: Optional[int] = None):
         self.client = Groq(api_key=GROQ_API_KEY)
         self.embedder = Embedder()
-        self.store = QDrantModel()
+        self.store = QDrantModel(conversation_id=conversation_id)
         self.conversation_id = conversation_id
         self.system_prompt = "You are a helpful AI assistant that uses the provided context to answer questions accurately."
     
@@ -81,47 +84,62 @@ class GroqModel:
             logger.error(f"Error in grqo_chat: {e}")
             return "Sorry, I encountered an error while processing your request."
 
-    def process_and_store(self, file_path: str):
-        """Process document and store embeddings"""
+    def process_and_store(self, file_path: str, conversation_id: Optional[int] = None):
+        """Process document and store embeddings with conversation context"""
         try:
-            # Load document
-            loader = TextLoader(file_path)
+            file_ext = Path(file_path).suffix.lower()
+
+            # Select appropriate loader based on file type
+            if file_ext in ['.txt', '.md']:
+                loader = TextLoader(file_path)
+            elif file_ext == '.pdf':
+                loader = PyPDFLoader(file_path)
+            elif file_ext == '.docx':
+                loader = Docx2txtLoader(file_path)
+            elif file_ext == '.csv':
+                loader = CSVLoader(file_path)
+            elif file_ext == '.json':
+                loader = JSONLoader(file_path, jq_schema='.', text_content=False)
+            else:
+                raise ValueError(f"Unsupported file type: {file_ext}")
+
             documents = loader.load()
-            
+
             # Extract text
             text = "\n".join([doc.page_content for doc in documents])
-            
+
             # Chunk and embed
             chunks = self.embedder.chunk_text(text)
             embeddings = self.embedder.embed_chunks(chunks)
-            
-            # Store in Qdrant
-            self.store.store(chunks, embeddings)
-            
-            logger.info(f"Processed and stored {len(chunks)} chunks from {file_path}")
-            
+
+            # Store in Qdrant with conversation_id
+            conv_id = conversation_id or self.conversation_id
+            self.store.store(chunks, embeddings, conversation_id=conv_id)
+
+            logger.info(f"Processed and stored {len(chunks)} chunks from {file_path} for conversation {conv_id}")
+
         except Exception as e:
             logger.error(f"Error processing document: {e}")
             raise
     
     def query_with_context(self, query: str, top_k: int = 5) -> str:
-        """Query with RAG context"""
+        """Query with RAG context, isolated by conversation"""
         try:
             # Get query embedding
             query_embedding = self.embedder.embed_chunks([query])[0]
-            
-            # Search for similar chunks
-            results = self.store.query(query_embedding, top_k=top_k)
-            
+
+            # Search for similar chunks with conversation filter
+            results = self.store.query(query_embedding, top_k=top_k, conversation_id=self.conversation_id)
+
             # Extract context text for the prompt
             context_text = [result["text"] for result in results]
-            
+
             # Store results in instance for grqo_chat to use
             self._last_results = results
-            
+
             # Generate response
             return self.grqo_chat(query, context_text)
-            
+
         except Exception as e:
             logger.error(f"Error in query_with_context: {e}")
             return "Sorry, I couldn't retrieve relevant context for your question."

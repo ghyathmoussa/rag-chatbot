@@ -16,7 +16,7 @@ router = APIRouter(
 )
 
 # Allowed file extensions
-ALLOWED_EXTENSIONS = {'.txt', '.md', '.pdf'}
+ALLOWED_EXTENSIONS = {'.txt', '.md', '.pdf', '.docx', '.csv', '.json'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
@@ -79,49 +79,10 @@ async def upload_document(
         
         # Process document
         groq_model = GroqModel(conversation_id=conversation_id)
-        
-        # Process based on file type
-        if file_ext in ['.txt', '.md']:
-            groq_model.process_and_store(temp_file_path)
-            chunks_processed = "Document processed"
-        elif file_ext == '.pdf':
-            # Extract text from PDF
-            try:
-                pdf_text = extract_text_from_pdf(temp_file_path)
-                if not pdf_text or len(pdf_text.strip()) < 10:
-                    os.remove(temp_file_path)
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Could not extract text from PDF. The file might be empty or contain only images."
-                    )
-                
-                # Save extracted text to temporary file
-                txt_file_path = temp_file_path.replace('.pdf', '_extracted.txt')
-                with open(txt_file_path, 'w', encoding='utf-8') as f:
-                    f.write(pdf_text)
-                
-                # Process the extracted text
-                groq_model.process_and_store(txt_file_path)
-                chunks_processed = "PDF processed"
-                
-                # Clean up text file
-                os.remove(txt_file_path)
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Error processing PDF: {e}")
-                os.remove(temp_file_path)
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error processing PDF: {str(e)}"
-                )
-        else:
-            os.remove(temp_file_path)
-            raise HTTPException(
-                status_code=501,
-                detail=f"Processing for {file_ext} files not yet implemented"
-            )
+
+        # Process document - now supports all allowed file types
+        groq_model.process_and_store(temp_file_path)
+        chunks_processed = "Document processed"  # You can get actual count from process_and_store
         
         # Clean up
         os.remove(temp_file_path)
@@ -168,11 +129,13 @@ async def upload_document_from_url(
 async def clear_conversation_documents(conversation_id: int):
     """Clear all documents from a conversation's vector store"""
     try:
-        # This would clear the vector store for this conversation
-        # Implementation depends on how you want to organize vector storage
+        from src.models.qdrant_model import QDrantModel
+        qdrant_model = QDrantModel()
+        qdrant_model.delete_conversation_points(conversation_id)
+
         return {
             "status": "success",
-            "message": "Documents cleared from conversation"
+            "message": f"Documents cleared from conversation {conversation_id}"
         }
     except Exception as e:
         logger.error(f"Error clearing documents: {e}")

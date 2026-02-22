@@ -181,9 +181,8 @@ with st.sidebar:
         
         uploaded_file = st.file_uploader(
             "Upload document",
-            type=['txt', 'md', 'pdf'],  # Text, markdown, and PDF files
-            key="doc_upload",
-            help="Supported formats: .txt, .md, .pdf"
+            type=['txt', 'md', 'pdf', 'docx', 'csv', 'json'],
+            key="doc_upload"
         )
         
         if uploaded_file:

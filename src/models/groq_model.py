@@ -1,5 +1,6 @@
 import time
 from typing import List, Optional, Dict, Any
+from pathlib import Path
 from groq import Groq
 from src.configs.configs import GROQ_API_KEY, GROQ_MODEL
 from src.models.embedding_model import Embedder
@@ -7,12 +8,14 @@ from src.models.qdrant_model import QDrantModel
 from src.database.conversation_service import conversation_service
 from src.database.connection import db_manager
 from src.utils.logger import logger
-from langchain.document_loaders import TextLoader
+
+# Document loaders for different file types
+from langchain.document_loaders import TextLoader, PyPDFLoader, Docx2txtLoader, CSVLoader, JSONLoader
 class GroqModel:
     def __init__(self, conversation_id: Optional[int] = None):
         self.client = Groq(api_key=GROQ_API_KEY)
         self.embedder = Embedder()
-        self.store = QDrantModel()
+        self.store = QDrantModel(conversation_id=conversation_id)
         self.conversation_id = conversation_id
         self.system_prompt = """You are a helpful AI assistant. When provided with context, use it to answer questions accurately. If no relevant context is provided, answer based on your general knowledge. Always be specific and helpful in your responses. Never just give generic greetings unless the user is actually greeting you."""
     
@@ -94,85 +97,64 @@ class GroqModel:
             logger.error(f"Error in grqo_chat: {e}")
             return "Sorry, I encountered an error while processing your request."
 
-    def process_and_store(self, file_path: str):
-        """Process document and store embeddings"""
+    def process_and_store(self, file_path: str, conversation_id: Optional[int] = None):
+        """Process document and store embeddings with conversation context"""
         try:
-            # Load document
-            loader = TextLoader(file_path)
+            file_ext = Path(file_path).suffix.lower()
+
+            # Select appropriate loader based on file type
+            if file_ext in ['.txt', '.md']:
+                loader = TextLoader(file_path)
+            elif file_ext == '.pdf':
+                loader = PyPDFLoader(file_path)
+            elif file_ext == '.docx':
+                loader = Docx2txtLoader(file_path)
+            elif file_ext == '.csv':
+                loader = CSVLoader(file_path)
+            elif file_ext == '.json':
+                loader = JSONLoader(file_path, jq_schema='.', text_content=False)
+            else:
+                raise ValueError(f"Unsupported file type: {file_ext}")
+
             documents = loader.load()
-            
+
             # Extract text
             text = "\n".join([doc.page_content for doc in documents])
-            
+
             # Chunk and embed
             chunks = self.embedder.chunk_text(text)
-            logger.info(f"Created {len(chunks)} chunks from {len(text)} characters")
-            
-            # Remove duplicate chunks (in case of chunking issues)
-            unique_chunks = []
-            seen = set()
-            for chunk in chunks:
-                if chunk not in seen:
-                    unique_chunks.append(chunk)
-                    seen.add(chunk)
-            
-            if len(unique_chunks) < len(chunks):
-                logger.warning(f"Removed {len(chunks) - len(unique_chunks)} duplicate chunks")
-                chunks = unique_chunks
-            
             embeddings = self.embedder.embed_chunks(chunks)
-            
-            # Store in Qdrant
-            self.store.store(chunks, embeddings)
-            
-            logger.info(f"Processed and stored {len(chunks)} chunks from {file_path}")
-            
+
+            # Store in Qdrant with conversation_id
+            conv_id = conversation_id or self.conversation_id
+            self.store.store(chunks, embeddings, conversation_id=conv_id)
+
+            logger.info(f"Processed and stored {len(chunks)} chunks from {file_path} for conversation {conv_id}")
+
         except Exception as e:
             logger.error(f"Error processing document: {e}")
             raise
     
-    def query_with_context(self, query: str, top_k: int = 5) -> Dict[str, Any]:
-        """Query with RAG context"""
+    def query_with_context(self, query: str, top_k: int = 5) -> str:
+        """Query with RAG context, isolated by conversation"""
         try:
             logger.info(f"Processing query: {query}")
             
             # Get query embedding
             query_embedding = self.embedder.embed_chunks([query])[0]
-            logger.info(f"Created query embedding with dimension: {len(query_embedding)}")
-            
-            # Search for similar chunks
-            results = self.store.query(query_embedding, top_k=top_k)
-            logger.info(f"Retrieved {len(results)} context chunks from Qdrant")
-            
+
+            # Search for similar chunks with conversation filter
+            results = self.store.query(query_embedding, top_k=top_k, conversation_id=self.conversation_id)
+
             # Extract context text for the prompt
             context_text = [result["text"] for result in results]
-            if context_text:
-                logger.info(f"Using context from {len(context_text)} chunks")
-            else:
-                logger.warning("No context found for query")
-            
+
             # Store results in instance for grqo_chat to use
             self._last_results = results
-            
+
             # Generate response
-            response_content = self.grqo_chat(query, context_text)
-            
-            # Get the last saved message info
-            if hasattr(self, '_last_message_info'):
-                return {
-                    "content": response_content,
-                    "context_used": self._last_message_info.get('context_used', []),
-                    "token_count": self._last_message_info.get('token_count', 0),
-                    "processing_time": self._last_message_info.get('processing_time', 0)
-                }
-            else:
-                return {
-                    "content": response_content,
-                    "context_used": [{"text": r["text"], "score": r["score"]} for r in results],
-                    "token_count": 0,
-                    "processing_time": 0
-                }
-            
+            return self.grqo_chat(query, context_text)
+
         except Exception as e:
             logger.error(f"Error in query_with_context: {e}")
             # Return error response in same format

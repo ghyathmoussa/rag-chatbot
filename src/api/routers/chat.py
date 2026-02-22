@@ -57,15 +57,37 @@ async def send_message(conversation_id: int, request: MessageRequest):
             request.message
         )
         
-        logger.info(f"Generated response: {response_data['content'][:100]}...")
-        
-        # Return the response directly
-        return {
-            "content": response_data["content"],
-            "context_used": response_data.get("context_used", []),
-            "token_count": response_data.get("token_count", 0),
-            "processing_time": response_data.get("processing_time", 0)
-        }
+        # Get the saved assistant message
+        logger.info("Getting conversation history...")
+        # Get more messages to ensure we get the new one
+        messages = conversation_service.get_conversation_history(conversation_id, limit=10)
+        logger.info(f"Retrieved {len(messages)} messages")
+
+        if messages:
+            # Find the most recent assistant message (the one we just created)
+            # Iterate in normal order (newest first)
+            assistant_msg = None
+            for msg in messages:
+                if msg.get('role') == 'assistant':
+                    assistant_msg = msg
+                    # Get the first (most recent) assistant message and stop
+                    break
+            
+            if assistant_msg:
+                logger.info(f"Returning message: role={assistant_msg.get('role')}, id={assistant_msg.get('id')}")
+                return MessageResponse(
+                    id=assistant_msg['id'],
+                    role=assistant_msg['role'],
+                    content=assistant_msg['content'],
+                    created_at=assistant_msg['created_at'],
+                    context_used=assistant_msg['context_used'],
+                    token_count=assistant_msg['token_count'],
+                    processing_time=assistant_msg['processing_time']
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Failed to retrieve assistant message")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to retrieve message")
             
     except Exception as e:
         logger.error(f"Error sending message: {e}")
